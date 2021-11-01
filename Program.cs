@@ -11,6 +11,7 @@ namespace DotNet_Graph
     class Program
     {
         static HashSet<ISymbol> Visited = new(SymbolEqualityComparer.Default);
+        static HashSet<ISymbol> Interfaces = new(SymbolEqualityComparer.Default);
 
         static async Task Main(string path)
         {
@@ -24,6 +25,7 @@ namespace DotNet_Graph
 
             Console.WriteLine("graph {");
             WriteSymbolGraph(rootClass);
+            WriteInterfaceImplementations(global);
             Console.WriteLine("}");
         }
 
@@ -38,6 +40,10 @@ namespace DotNet_Graph
 
             if (symbol is ITypeSymbol type)
             {
+                if (type.TypeKind == TypeKind.Interface)
+                {
+                    Interfaces.Add(type);
+                }
                 foreach (var @interface in type.Interfaces)
                 {
                     references.Add(@interface.ToDisplayString());
@@ -64,6 +70,19 @@ namespace DotNet_Graph
             foreach (var reference in references) Console.WriteLine($@"  ""{name}"" -- ""{reference}""");
 
             foreach (var nextSymbol in nextSymbols) WriteSymbolGraph(nextSymbol);
+        }
+
+        static void WriteInterfaceImplementations(INamespaceSymbol ns)
+        {
+            foreach (var type in ns.GetTypeMembers())
+            {
+                if (type.Interfaces.Any(i => Interfaces.Contains(i)))
+                {
+                    WriteSymbolGraph(type);
+                }
+            }
+
+            foreach (var child in ns.GetNamespaceMembers()) WriteInterfaceImplementations(child);
         }
     }
 }
