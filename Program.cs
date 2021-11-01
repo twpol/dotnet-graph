@@ -10,6 +10,8 @@ namespace DotNet_Graph
 {
     class Program
     {
+        static HashSet<ISymbol> Visited = new(SymbolEqualityComparer.Default);
+
         static async Task Main(string path)
         {
             MSBuildLocator.RegisterDefaults();
@@ -18,40 +20,50 @@ namespace DotNet_Graph
 
             var compilation = await workspace.CurrentSolution.Projects.First().GetCompilationAsync();
             var global = compilation.GlobalNamespace;
-
             var rootClass = compilation.GetEntryPoint(System.Threading.CancellationToken.None).ContainingType;
-            var visited = new HashSet<string>();
+
             Console.WriteLine("graph {");
-            DumpType(rootClass, visited);
+            WriteSymbolGraph(rootClass);
             Console.WriteLine("}");
         }
 
-        static void DumpType(INamespaceOrTypeSymbol symbol, ISet<string> visited)
+        static void WriteSymbolGraph(INamespaceOrTypeSymbol symbol)
         {
-            var name = symbol.ToDisplayString();
-            if (visited.Contains(name)) return;
-            visited.Add(name);
+            if (Visited.Contains(symbol)) return;
+            Visited.Add(symbol);
 
-            var referencedTypes = new HashSet<string>();
-            var newSymbols = new HashSet<INamespaceOrTypeSymbol>(SymbolEqualityComparer.Default);
+            var name = symbol.ToDisplayString();
+            var references = new HashSet<string>();
+            var nextSymbols = new HashSet<INamespaceOrTypeSymbol>(SymbolEqualityComparer.Default);
+
+            if (symbol is ITypeSymbol type)
+            {
+                foreach (var @interface in type.Interfaces)
+                {
+                    references.Add(@interface.ToDisplayString());
+                }
+            }
 
             foreach (var member in symbol.GetMembers())
             {
                 if (member is IFieldSymbol field)
                 {
-                    var type = field.Type;
-                    if (type.Locations.Any(location => location.IsInSource))
+                    var innerType = field.Type;
+                    if (innerType.Locations.Any(location => location.IsInSource))
                     {
-                        var innerName = type.ToDisplayString();
-                        if (!referencedTypes.Contains(innerName) && innerName != name) referencedTypes.Add(innerName);
-                        newSymbols.Add(type);
+                        references.Add(innerType.ToDisplayString());
+                        nextSymbols.Add(innerType);
                     }
+                }
+                else if (member is INamespaceOrTypeSymbol namespaceOrType)
+                {
+                    nextSymbols.Add(namespaceOrType);
                 }
             }
 
-            foreach (var referencedType in referencedTypes) Console.WriteLine($@"  ""{name}"" -- ""{referencedType}""");
+            foreach (var reference in references) Console.WriteLine($@"  ""{name}"" -- ""{reference}""");
 
-            foreach (var newSymbol in newSymbols) DumpType(newSymbol, visited);
+            foreach (var nextSymbol in nextSymbols) WriteSymbolGraph(nextSymbol);
         }
     }
 }
