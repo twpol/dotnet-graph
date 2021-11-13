@@ -11,7 +11,9 @@ namespace DotNet_Graph
     class Program
     {
         static HashSet<ISymbol> Visited = new(SymbolEqualityComparer.Default);
+        static Queue<INamespaceOrTypeSymbol> Unvisited = new();
         static HashSet<ISymbol> Interfaces = new(SymbolEqualityComparer.Default);
+        static Dictionary<string, HashSet<string>> Namespaces = new();
 
         static async Task Main(string path)
         {
@@ -22,11 +24,22 @@ namespace DotNet_Graph
             var compilation = await workspace.CurrentSolution.Projects.First().GetCompilationAsync();
             var global = compilation.GlobalNamespace;
             var rootClass = compilation.GetEntryPoint(System.Threading.CancellationToken.None).ContainingType;
+            Unvisited.Enqueue(rootClass);
 
-            Console.WriteLine("graph {");
-            WriteSymbolGraph(rootClass);
+            Console.WriteLine("digraph {");
+            Console.WriteLine("  graph [splines = polyline]");
+            Console.WriteLine("  edge [color = \"#cccccc\"]");
+            while (Unvisited.Count > 0) WriteNextSymbol();
             WriteInterfaceImplementations(global);
             Console.WriteLine("}");
+        }
+
+        static void WriteNextSymbol()
+        {
+            if (Unvisited.TryDequeue(out var symbol))
+            {
+                WriteSymbolGraph(symbol);
+            }
         }
 
         static void WriteSymbolGraph(INamespaceOrTypeSymbol symbol)
@@ -35,8 +48,15 @@ namespace DotNet_Graph
             Visited.Add(symbol);
 
             var name = symbol.ToDisplayString();
+            var ns = symbol.ContainingNamespace.ToDisplayString();
+            if (!Namespaces.ContainsKey(ns))
+            {
+                Namespaces.Add(ns, new());
+            }
+            Namespaces[ns].Add(name);
+            Console.WriteLine($@"  ""{name}"" [label = ""{symbol.Name}""]");
+
             var references = new HashSet<string>();
-            var nextSymbols = new HashSet<INamespaceOrTypeSymbol>(SymbolEqualityComparer.Default);
 
             if (symbol is ITypeSymbol type)
             {
@@ -55,21 +75,31 @@ namespace DotNet_Graph
                 if (member is IFieldSymbol field)
                 {
                     var innerType = field.Type;
-                    if (innerType.Locations.Any(location => location.IsInSource))
+                    AddType(innerType, references);
+                    if (innerType is INamedTypeSymbol namedType)
                     {
-                        references.Add(innerType.ToDisplayString());
-                        nextSymbols.Add(innerType);
+                        foreach (var typeArg in namedType.TypeArguments)
+                        {
+                            AddType(typeArg, references);
+                        }
                     }
                 }
                 else if (member is INamespaceOrTypeSymbol namespaceOrType)
                 {
-                    nextSymbols.Add(namespaceOrType);
+                    Unvisited.Enqueue(namespaceOrType);
                 }
             }
 
-            foreach (var reference in references) Console.WriteLine($@"  ""{name}"" -- ""{reference}""");
+            foreach (var reference in references) Console.WriteLine($@"  ""{name}"" -> ""{reference}""");
+        }
 
-            foreach (var nextSymbol in nextSymbols) WriteSymbolGraph(nextSymbol);
+        static void AddType(ITypeSymbol type, ISet<string> references)
+        {
+            if (type.Locations.Any(location => location.IsInSource))
+            {
+                references.Add(type.ToDisplayString());
+                Unvisited.Enqueue(type);
+            }
         }
 
         static void WriteInterfaceImplementations(INamespaceSymbol ns)
