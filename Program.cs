@@ -96,7 +96,7 @@ namespace DotNet_Graph
                     Console.WriteLine($@"  ""{name}"" [label = ""{symbol.Name}""]");
                     break;
                 case OutputFormat.MermaidFlowchart:
-                    Console.WriteLine($@"  {name.Replace(".", "_")}[{symbol.Name}]");
+                    Console.WriteLine($@"  {GetSafeMermaidName(name)}[{symbol.Name}]");
                     break;
             }
 
@@ -159,7 +159,7 @@ namespace DotNet_Graph
                         Console.WriteLine($@"  ""{name}"" -> ""{reference}""");
                         break;
                     case OutputFormat.MermaidFlowchart:
-                        Console.WriteLine($@"  {name.Replace(".", "_")} --> {reference.Replace(".", "_")}");
+                        Console.WriteLine($@"  {GetSafeMermaidName(name)} --> {GetSafeMermaidName(reference)}");
                         break;
                 }
             }
@@ -179,6 +179,11 @@ namespace DotNet_Graph
                     AddType(typeArg, references);
                 }
             }
+        }
+
+        static string GetSafeMermaidName(string name)
+        {
+            return name.Replace(".", "_").Replace("<", "__").Replace(",", "_").Replace(" ", "").Replace(">", "");
         }
     }
 }
