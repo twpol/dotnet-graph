@@ -22,13 +22,17 @@ dotnet run [options]
 
   Specify the root class to analyse (default: program entry point).
 
+- `--include-base`
+
+  Analyse base classes.
+
 - `--include-derived`
 
   Analyse derived classes.
 
-- `--include-base`
+- `--include-implementations`
 
-  Analyse base classes.
+  Analyse implementations of interfaces.
 
 - `--include-interfaces`
 

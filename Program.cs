@@ -20,34 +20,26 @@ namespace DotNet_Graph
 
         static HashSet<ISymbol> Visited = new(SymbolEqualityComparer.Default);
         static Queue<INamespaceOrTypeSymbol> Unvisited = new();
-        static HashSet<ISymbol> Interfaces = new(SymbolEqualityComparer.Default);
 
 
         static Solution Solution;
         static OutputFormat Format;
-        static bool IncludeDerived;
         static bool IncludeBase;
+        static bool IncludeDerived;
+        static bool IncludeImplementations;
         static bool IncludeInterfaces;
         static bool IncludeMembers;
         static bool IncludeTypeArgs;
 
-        static async Task Main(string path, OutputFormat format = OutputFormat.Graphviz, string root = null, bool includeDerived = false, bool includeBase = false, bool includeInterfaces = false, bool includeMembers = false, bool includeTypeArgs = false)
+        static async Task Main(string path, OutputFormat format = OutputFormat.Graphviz, string root = null, bool includeBase = false, bool includeDerived = false, bool includeImplementations = false, bool includeInterfaces = false, bool includeMembers = false, bool includeTypeArgs = false)
         {
             Format = format;
-            IncludeDerived = includeDerived;
             IncludeBase = includeBase;
+            IncludeDerived = includeDerived;
+            IncludeImplementations = includeImplementations;
             IncludeInterfaces = includeInterfaces;
             IncludeMembers = includeMembers;
             IncludeTypeArgs = includeTypeArgs;
-
-            if (IncludeDerived == false && IncludeBase == false && IncludeInterfaces == false && IncludeMembers == false && IncludeTypeArgs == false)
-            {
-                IncludeDerived = true;
-                IncludeBase = true;
-                IncludeInterfaces = true;
-                IncludeMembers = true;
-                IncludeTypeArgs = true;
-            }
 
             MSBuildLocator.RegisterDefaults();
             var workspace = MSBuildWorkspace.Create();
@@ -72,7 +64,6 @@ namespace DotNet_Graph
                     break;
             }
             await WriteSymbolGraph(rootClass);
-            await WriteInterfaceImplementations(global, WriteSymbolGraph);
             switch (Format)
             {
                 case OutputFormat.Graphviz:
@@ -111,20 +102,31 @@ namespace DotNet_Graph
 
             var references = new HashSet<string>();
 
-            if (IncludeDerived && symbol is INamedTypeSymbol namedType)
+            if (symbol is INamedTypeSymbol namedType)
             {
-                foreach (var derived in await SymbolFinder.FindDerivedClassesAsync(namedType, Solution, false, null, CancellationToken.None))
+                if (IncludeDerived)
                 {
-                    AddType(derived, references);
+                    foreach (var derived in await SymbolFinder.FindDerivedClassesAsync(namedType, Solution, false, null, CancellationToken.None))
+                    {
+                        AddType(derived, references);
+                    }
+                    foreach (var derived in await SymbolFinder.FindDerivedInterfacesAsync(namedType, Solution, false, null, CancellationToken.None))
+                    {
+                        AddType(derived, references);
+                    }
+                }
+
+                if (IncludeImplementations)
+                {
+                    foreach (var derived in await SymbolFinder.FindImplementationsAsync(namedType, Solution, false, null, CancellationToken.None))
+                    {
+                        AddType(derived, references);
+                    }
                 }
             }
 
             if (symbol is ITypeSymbol type)
             {
-                if (type.TypeKind == TypeKind.Interface)
-                {
-                    Interfaces.Add(type);
-                }
                 if (IncludeBase && type.BaseType != null)
                 {
                     AddType(type.BaseType, references);
@@ -176,22 +178,6 @@ namespace DotNet_Graph
                 {
                     AddType(typeArg, references);
                 }
-            }
-        }
-
-        static async Task WriteInterfaceImplementations(INamespaceSymbol ns, Func<INamedTypeSymbol, Task> visitor)
-        {
-            foreach (var type in ns.GetTypeMembers())
-            {
-                if (type.Interfaces.Any(i => Interfaces.Contains(i)))
-                {
-                    await visitor(type);
-                }
-            }
-
-            foreach (var child in ns.GetNamespaceMembers())
-            {
-                await WriteInterfaceImplementations(child, visitor);
             }
         }
     }
