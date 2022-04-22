@@ -1,55 +1,123 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.MSBuild;
 
 namespace DotNet_Graph
 {
     class Program
     {
+        enum OutputFormat
+        {
+            Graphviz,
+            MermaidFlowchart,
+        }
+
         static HashSet<ISymbol> Visited = new(SymbolEqualityComparer.Default);
         static Queue<INamespaceOrTypeSymbol> Unvisited = new();
         static HashSet<ISymbol> Interfaces = new(SymbolEqualityComparer.Default);
 
-        static async Task Main(string path)
+
+        static Solution Solution;
+        static OutputFormat Format;
+        static bool IncludeDerived;
+        static bool IncludeBase;
+        static bool IncludeInterfaces;
+        static bool IncludeMembers;
+        static bool IncludeTypeArgs;
+
+        static async Task Main(string path, OutputFormat format = OutputFormat.Graphviz, string root = null, bool includeDerived = false, bool includeBase = false, bool includeInterfaces = false, bool includeMembers = false, bool includeTypeArgs = false)
         {
+            Format = format;
+            IncludeDerived = includeDerived;
+            IncludeBase = includeBase;
+            IncludeInterfaces = includeInterfaces;
+            IncludeMembers = includeMembers;
+            IncludeTypeArgs = includeTypeArgs;
+
+            if (IncludeDerived == false && IncludeBase == false && IncludeInterfaces == false && IncludeMembers == false && IncludeTypeArgs == false)
+            {
+                IncludeDerived = true;
+                IncludeBase = true;
+                IncludeInterfaces = true;
+                IncludeMembers = true;
+                IncludeTypeArgs = true;
+            }
+
             MSBuildLocator.RegisterDefaults();
             var workspace = MSBuildWorkspace.Create();
             await workspace.OpenSolutionAsync(path);
 
+            Solution = workspace.CurrentSolution;
+
             var compilation = await workspace.CurrentSolution.Projects.First().GetCompilationAsync();
             var global = compilation.GlobalNamespace;
-            var rootClass = compilation.GetEntryPoint(System.Threading.CancellationToken.None).ContainingType;
+            var rootClass = root == null ? compilation.GetEntryPoint(System.Threading.CancellationToken.None).ContainingType : compilation.GetTypeByMetadataName(root);
 
-            Console.WriteLine("digraph {");
-            Console.WriteLine("  graph [splines = polyline]");
-            Console.WriteLine("  edge [color = \"#cccccc\"]");
-            WriteSymbolGraph(rootClass);
-            WriteInterfaceImplementations(global);
-            Console.WriteLine("}");
+            switch (Format)
+            {
+                case OutputFormat.Graphviz:
+                    Console.WriteLine("digraph {");
+                    Console.WriteLine("  graph [splines = polyline]");
+                    Console.WriteLine("  edge [color = \"#cccccc\"]");
+                    break;
+                case OutputFormat.MermaidFlowchart:
+                    Console.WriteLine("```mermaid");
+                    Console.WriteLine("flowchart");
+                    break;
+            }
+            await WriteSymbolGraph(rootClass);
+            await WriteInterfaceImplementations(global, WriteSymbolGraph);
+            switch (Format)
+            {
+                case OutputFormat.Graphviz:
+                    Console.WriteLine("}");
+                    break;
+                case OutputFormat.MermaidFlowchart:
+                    Console.WriteLine("```");
+                    break;
+            }
         }
 
-        static void WriteSymbolGraph(INamespaceOrTypeSymbol symbol)
+        static async Task WriteSymbolGraph(INamespaceOrTypeSymbol symbol)
         {
             Unvisited.Enqueue(symbol);
             while (Unvisited.TryDequeue(out var next))
             {
-                WriteSymbol(next);
+                await WriteSymbol(next);
             }
         }
 
-        static void WriteSymbol(INamespaceOrTypeSymbol symbol)
+        static async Task WriteSymbol(INamespaceOrTypeSymbol symbol)
         {
             if (Visited.Contains(symbol)) return;
             Visited.Add(symbol);
 
             var name = symbol.ToDisplayString();
-            Console.WriteLine($@"  ""{name}"" [label = ""{symbol.Name}""]");
+            switch (Format)
+            {
+                case OutputFormat.Graphviz:
+                    Console.WriteLine($@"  ""{name}"" [label = ""{symbol.Name}""]");
+                    break;
+                case OutputFormat.MermaidFlowchart:
+                    Console.WriteLine($@"  {name.Replace(".", "_")}[{symbol.Name}]");
+                    break;
+            }
 
             var references = new HashSet<string>();
+
+            if (IncludeDerived && symbol is INamedTypeSymbol namedType)
+            {
+                foreach (var derived in await SymbolFinder.FindDerivedClassesAsync(namedType, Solution, false, null, CancellationToken.None))
+                {
+                    AddType(derived, references);
+                }
+            }
 
             if (symbol is ITypeSymbol type)
             {
@@ -57,27 +125,41 @@ namespace DotNet_Graph
                 {
                     Interfaces.Add(type);
                 }
-                if (type.BaseType != null)
+                if (IncludeBase && type.BaseType != null)
                 {
                     AddType(type.BaseType, references);
                 }
-                foreach (var @interface in type.Interfaces)
+                if (IncludeInterfaces)
                 {
-                    AddType(@interface, references);
+                    foreach (var @interface in type.Interfaces)
+                    {
+                        AddType(@interface, references);
+                    }
                 }
             }
 
-            foreach (var member in symbol.GetMembers())
+            if (IncludeMembers)
             {
-                if (member is IFieldSymbol field)
+                foreach (var member in symbol.GetMembers())
                 {
-                    AddType(field.Type, references);
+                    if (member is IFieldSymbol field)
+                    {
+                        AddType(field.Type, references);
+                    }
                 }
             }
 
             foreach (var reference in references)
             {
-                Console.WriteLine($@"  ""{name}"" -> ""{reference}""");
+                switch (Format)
+                {
+                    case OutputFormat.Graphviz:
+                        Console.WriteLine($@"  ""{name}"" -> ""{reference}""");
+                        break;
+                    case OutputFormat.MermaidFlowchart:
+                        Console.WriteLine($@"  {name.Replace(".", "_")} --> {reference.Replace(".", "_")}");
+                        break;
+                }
             }
         }
 
@@ -88,7 +170,7 @@ namespace DotNet_Graph
                 references.Add(type.ToDisplayString());
                 Unvisited.Enqueue(type);
             }
-            if (type is INamedTypeSymbol namedType)
+            if (IncludeTypeArgs && type is INamedTypeSymbol namedType)
             {
                 foreach (var typeArg in namedType.TypeArguments)
                 {
@@ -97,19 +179,19 @@ namespace DotNet_Graph
             }
         }
 
-        static void WriteInterfaceImplementations(INamespaceSymbol ns)
+        static async Task WriteInterfaceImplementations(INamespaceSymbol ns, Func<INamedTypeSymbol, Task> visitor)
         {
             foreach (var type in ns.GetTypeMembers())
             {
                 if (type.Interfaces.Any(i => Interfaces.Contains(i)))
                 {
-                    WriteSymbolGraph(type);
+                    await visitor(type);
                 }
             }
 
             foreach (var child in ns.GetNamespaceMembers())
             {
-                WriteInterfaceImplementations(child);
+                await WriteInterfaceImplementations(child, visitor);
             }
         }
     }
