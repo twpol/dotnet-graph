@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.MSBuild;
 
-namespace DotNet_Graph
+namespace DotNetGraph
 {
     class Program
     {
@@ -31,6 +31,18 @@ namespace DotNet_Graph
         static bool IncludeMembers;
         static bool IncludeTypeArgs;
 
+        /// <summary>
+        /// A simple utility to create Graphviz/Mermaid graphs of .NET code
+        /// </summary>
+        /// <param name="path">Specify the Visual Studio Solution file to analyse</param>
+        /// <param name="format">Specify the output format</param>
+        /// <param name="root">Specify the root class to analyse (default: program entry point)</param>
+        /// <param name="includeBase">Analyse base classes</param>
+        /// <param name="includeDerived">Analyse derived classes</param>
+        /// <param name="includeImplementations">Analyse implementations of interfaces</param>
+        /// <param name="includeInterfaces">Analyse implemented interfaces</param>
+        /// <param name="includeMembers">Analyse class members (properties and fields)</param>
+        /// <param name="includeTypeArgs">Analyse class type arguments</param>
         static async Task Main(string path, OutputFormat format = OutputFormat.Graphviz, string root = null, bool includeBase = false, bool includeDerived = false, bool includeImplementations = false, bool includeInterfaces = false, bool includeMembers = false, bool includeTypeArgs = false)
         {
             Format = format;

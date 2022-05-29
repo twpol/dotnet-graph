@@ -1,18 +1,21 @@
-# DotNet Graph
+# DotNetGraph
 
 A simple utility to create Graphviz/Mermaid graphs of .NET code.
 
-## Synopsis
+## Usage
 
 ```
-dotnet run [options]
+dotnet run -- [options]
+```
+```
+DotNetGraph [options]
 ```
 
 ## Options
 
-- `--path <PATH>`
+- `--path <path>`
 
-  Specify the Visual Studio Solution file to analyse.
+  Specify the Visual Studio Solution file to analyse (required).
 
 - `--format <Graphviz|MermaidFlowchart>`
 
