@@ -30,6 +30,7 @@ namespace DotNetGraph
         static bool IncludeInterfaces;
         static bool IncludeMembers;
         static bool IncludeTypeArgs;
+        static bool IncludeEnums;
 
         /// <summary>
         /// A simple utility to create Graphviz/Mermaid graphs of .NET code
@@ -43,7 +44,8 @@ namespace DotNetGraph
         /// <param name="includeInterfaces">Analyse implemented interfaces</param>
         /// <param name="includeMembers">Analyse class members (properties and fields)</param>
         /// <param name="includeTypeArgs">Analyse class type arguments</param>
-        static async Task Main(string path, OutputFormat format = OutputFormat.Graphviz, string root = null, bool includeBase = false, bool includeDerived = false, bool includeImplementations = false, bool includeInterfaces = false, bool includeMembers = false, bool includeTypeArgs = false)
+        /// <param name="includeEnums">Analyse enum classes</param>
+        static async Task Main(string path, OutputFormat format = OutputFormat.Graphviz, string root = null, bool includeBase = false, bool includeDerived = false, bool includeImplementations = false, bool includeInterfaces = false, bool includeMembers = false, bool includeTypeArgs = false, bool includeEnums = false)
         {
             Format = format;
             IncludeBase = includeBase;
@@ -52,6 +54,7 @@ namespace DotNetGraph
             IncludeInterfaces = includeInterfaces;
             IncludeMembers = includeMembers;
             IncludeTypeArgs = includeTypeArgs;
+            IncludeEnums = includeEnums;
 
             MSBuildLocator.RegisterDefaults();
             var workspace = MSBuildWorkspace.Create();
@@ -179,6 +182,8 @@ namespace DotNetGraph
 
         static void AddType(ITypeSymbol type, ISet<string> references)
         {
+            if (!IncludeEnums && type.TypeKind == TypeKind.Enum) return;
+
             if (type.Locations.Any(location => location.IsInSource))
             {
                 references.Add(type.ToDisplayString());

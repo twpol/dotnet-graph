@@ -48,3 +48,7 @@ DotNetGraph [options]
 - `--include-type-args`
 
   Analyse class type arguments.
+
+- `--include-enums`
+
+  Analyse enum classes.
