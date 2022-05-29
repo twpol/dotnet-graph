@@ -31,6 +31,7 @@ namespace DotNetGraph
         static bool IncludeMembers;
         static bool IncludeTypeArgs;
         static bool IncludeEnums;
+        static List<string> Excludes;
 
         /// <summary>
         /// A simple utility to create Graphviz/Mermaid graphs of .NET code
@@ -45,7 +46,8 @@ namespace DotNetGraph
         /// <param name="includeMembers">Analyse class members (properties and fields)</param>
         /// <param name="includeTypeArgs">Analyse class type arguments</param>
         /// <param name="includeEnums">Analyse enum classes</param>
-        static async Task Main(string path, OutputFormat format = OutputFormat.Graphviz, string root = null, bool includeBase = false, bool includeDerived = false, bool includeImplementations = false, bool includeInterfaces = false, bool includeMembers = false, bool includeTypeArgs = false, bool includeEnums = false)
+        /// <param name="excludes">Exclude types from analysis</param>
+        static async Task Main(string path, OutputFormat format = OutputFormat.Graphviz, string root = null, bool includeBase = false, bool includeDerived = false, bool includeImplementations = false, bool includeInterfaces = false, bool includeMembers = false, bool includeTypeArgs = false, bool includeEnums = false, List<string> excludes = null)
         {
             Format = format;
             IncludeBase = includeBase;
@@ -55,6 +57,7 @@ namespace DotNetGraph
             IncludeMembers = includeMembers;
             IncludeTypeArgs = includeTypeArgs;
             IncludeEnums = includeEnums;
+            Excludes = excludes ?? new List<string>();
 
             MSBuildLocator.RegisterDefaults();
             var workspace = MSBuildWorkspace.Create();
@@ -182,6 +185,7 @@ namespace DotNetGraph
 
         static void AddType(ITypeSymbol type, ISet<string> references)
         {
+            if (Excludes.Contains(type.ToDisplayString())) return;
             if (!IncludeEnums && type.TypeKind == TypeKind.Enum) return;
 
             if (type.Locations.Any(location => location.IsInSource))

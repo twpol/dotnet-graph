@@ -52,3 +52,7 @@ DotNetGraph [options]
 - `--include-enums`
 
   Analyse enum classes.
+
+- `--excludes <excludes>`
+
+  Exclude types from analysis.
