@@ -1,6 +1,6 @@
 # DotNetGraph
 
-A simple utility to create Graphviz/Mermaid graphs of .NET code.
+Command-line tool for creating Graphviz/Mermaid graphs of .NET code.
 
 ## Usage
 
