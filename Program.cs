@@ -34,7 +34,7 @@ namespace DotNetGraph
         static List<string> Excludes;
 
         /// <summary>
-        /// A simple utility to create Graphviz/Mermaid graphs of .NET code
+        /// Command-line tool for creating Graphviz/Mermaid graphs of .NET code
         /// </summary>
         /// <param name="path">Specify the Visual Studio Solution file to analyse</param>
         /// <param name="format">Specify the output format</param>
